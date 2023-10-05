@@ -1,4 +1,5 @@
 using System;
+using Code.Contracts;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
@@ -7,18 +8,22 @@ namespace Code
     public class ClockController : MonoBehaviour
     {
         [SerializeField] private Clock _clock;
-        
+
+        private ITimeService _timeService;
+
         private readonly float Timeout = 3600f;
         private float _delayUpdateFromServer;
         private TimeSpan _time;
-        private long _incrementalTime;
         private float _elapsedTime;
-        private DateTime _timeFromServer;
+
+        public void Initialize(ITimeService timeService)
+        {
+            _timeService = timeService;
+        }
 
         private void Start()
-        { 
+        {
             GetUpdatedServerTimeAsync().Forget();
-            _time = new TimeSpan(0, _timeFromServer.Hour, _timeFromServer.Minute, _timeFromServer.Second);
             _delayUpdateFromServer = Timeout;
 
             SetClock();
@@ -26,19 +31,19 @@ namespace Code
 
         private void SetClock()
         {
-            if (_clock == null) 
+            if (_clock == null)
             {
                 return;
             }
-            
+
             _clock.SetTime(_time);
         }
 
         private void OnApplicationFocus(bool hasFocus)
         {
-            UpdateTimeFromServer();
+            GetUpdatedServerTimeAsync().Forget();
         }
-        
+
         void Update()
         {
             UpdateClockPerHour();
@@ -59,31 +64,23 @@ namespace Code
         private void UpdateClockPerHour()
         {
             _delayUpdateFromServer -= Time.deltaTime;
+
             if (_delayUpdateFromServer <= 0)
             {
                 GetUpdatedServerTimeAsync().Forget();
-                var timeSpan = new TimeSpan(0, _timeFromServer.Hour, _timeFromServer.Minute, _timeFromServer.Second);
-                if (_time != timeSpan)
-                {
-                    Debug.Log($"[Timer] Updated time per hour");
-                    _time = timeSpan;
-                    SetClock();
-                }
+                
+                Debug.Log($"[Timer] Updated time per hour");
+                SetClock();
+
                 _delayUpdateFromServer = Timeout;
             }
         }
 
-        private void UpdateTimeFromServer()
-        {
-            GetUpdatedServerTimeAsync().Forget();
-            _time = new TimeSpan(0, _timeFromServer.Hour, _timeFromServer.Minute, _timeFromServer.Second);
-        }
-        
         private async UniTask GetUpdatedServerTimeAsync()
         {
-            var time = await TimeManager.TryGetTimeAsync();
+            var time = await _timeService.GetTimeAsync();
 
-            _timeFromServer = time;
+            _time = time;
         }
     }
 }
